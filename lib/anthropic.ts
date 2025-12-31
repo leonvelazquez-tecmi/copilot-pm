@@ -1,43 +1,36 @@
+import Anthropic from "@anthropic-ai/sdk";
+
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
 }
 
-export async function callOllama(messages: ChatMessage[]): Promise<string> {
+export async function callClaude(messages: ChatMessage[]): Promise<string> {
   const systemPrompt =
     "Eres un experto en gestión de proyectos a nivel estratégico para una institución de educación superior. Tu rol es guiar conversacionalmente a líderes a pensar con rigor sobre sus proyectos, ayudándoles a identificar objetivos claros, recursos necesarios, riesgos potenciales y estrategias de implementación efectivas.";
 
   try {
-    // Construir el prompt con system prompt y historial de conversación
-    const conversationHistory = messages
-      .map((msg) => `${msg.role === "user" ? "Usuario" : "Asistente"}: ${msg.content}`)
-      .join("\n\n");
-    
-    const prompt = `${systemPrompt}\n\n${conversationHistory}\n\nAsistente:`;
-
-    const response = await fetch("https://copilot-pm-production.up.railway.app/api/generate", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "mistral",
-        prompt: prompt,
-        stream: false,
-      }),
+    const response = await client.messages.create({
+      model: "claude-3-5-sonnet-20241022",
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: messages.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+      })),
     });
 
-    if (!response.ok) {
-      throw new Error(`Error en Ollama API: ${response.statusText}`);
+    // Claude API returns content as an array, we need to extract the text
+    const content = response.content[0];
+    if (content.type === "text") {
+      return content.text;
     }
 
-    const data = await response.json();
-    return data.response;
+    throw new Error("Respuesta inesperada de Claude API");
   } catch (error) {
-    console.error("Error calling Ollama API:", error);
+    console.error("Error calling Claude API:", error);
     throw error;
   }
 }
-
-// Exportar como callClaude para mantener compatibilidad con route.ts
-export const callClaude = callOllama;
