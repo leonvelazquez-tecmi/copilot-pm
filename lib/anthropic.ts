@@ -1,5 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 
+// Configuración del modelo Claude (alias dinámico de Anthropic)
+const CLAUDE_MODEL = "claude-sonnet-4-5";
+
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export interface ChatMessage {
@@ -12,18 +15,16 @@ export async function callClaude(messages: ChatMessage[]): Promise<string> {
     "Eres un experto en gestión de proyectos a nivel estratégico para una institución de educación superior. Tu rol es guiar conversacionalmente a líderes a pensar con rigor sobre sus proyectos, ayudándoles a identificar objetivos claros, recursos necesarios, riesgos potenciales y estrategias de implementación efectivas.";
 
   // #region agent log
-  fetch('http://127.0.0.1:7244/ingest/c0fd9e8e-2928-484b-a63e-33c0c1b6c9a4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/anthropic.ts:10',message:'callClaude entry',data:{messagesCount:messages.length,hasApiKey:!!process.env.ANTHROPIC_API_KEY},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  fetch('http://127.0.0.1:7244/ingest/c0fd9e8e-2928-484b-a63e-33c0c1b6c9a4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/anthropic.ts:13',message:'callClaude entry',data:{messagesCount:messages.length,hasApiKey:!!process.env.ANTHROPIC_API_KEY},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
   // #endregion
-
-  const modelName = "claude-3-sonnet-20240229";
   
   // #region agent log
-  fetch('http://127.0.0.1:7244/ingest/c0fd9e8e-2928-484b-a63e-33c0c1b6c9a4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/anthropic.ts:16',message:'Model name before API call',data:{modelName},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  fetch('http://127.0.0.1:7244/ingest/c0fd9e8e-2928-484b-a63e-33c0c1b6c9a4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/anthropic.ts:19',message:'Model name before API call',data:{modelName:CLAUDE_MODEL},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
   // #endregion
 
   try {
     const requestPayload = {
-      model: modelName,
+      model: CLAUDE_MODEL,
       max_tokens: 1024,
       system: systemPrompt,
       messages: messages.map((msg) => ({
