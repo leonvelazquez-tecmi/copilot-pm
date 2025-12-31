@@ -1,13 +1,9 @@
-import Replicate from "replicate";
-
-const replicate = new Replicate({ auth: process.env.REPLICATE_API_KEY });
-
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
 }
 
-export async function callReplicate(messages: ChatMessage[]): Promise<string> {
+export async function callOllama(messages: ChatMessage[]): Promise<string> {
   const systemPrompt =
     "Eres un experto en gestión de proyectos a nivel estratégico para una institución de educación superior. Tu rol es guiar conversacionalmente a líderes a pensar con rigor sobre sus proyectos, ayudándoles a identificar objetivos claros, recursos necesarios, riesgos potenciales y estrategias de implementación efectivas.";
 
@@ -19,23 +15,29 @@ export async function callReplicate(messages: ChatMessage[]): Promise<string> {
     
     const prompt = `${systemPrompt}\n\n${conversationHistory}\n\nAsistente:`;
 
-    const output = await replicate.run("meta/llama-2-7b-chat", {
-      input: {
-        prompt: prompt,
-        max_length: 1024,
+    const response = await fetch("https://copilot-pm-production.up.railway.app/api/generate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
       },
+      body: JSON.stringify({
+        model: "mistral",
+        prompt: prompt,
+        stream: false,
+      }),
     });
 
-    // Replicate puede devolver un array o string, necesitamos extraer el texto
-    if (Array.isArray(output)) {
-      return output.join("");
+    if (!response.ok) {
+      throw new Error(`Error en Ollama API: ${response.statusText}`);
     }
-    return String(output);
+
+    const data = await response.json();
+    return data.response;
   } catch (error) {
-    console.error("Error calling Replicate API:", error);
+    console.error("Error calling Ollama API:", error);
     throw error;
   }
 }
 
 // Exportar como callClaude para mantener compatibilidad con route.ts
-export const callClaude = callReplicate;
+export const callClaude = callOllama;
