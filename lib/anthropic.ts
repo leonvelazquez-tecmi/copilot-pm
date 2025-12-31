@@ -19,7 +19,7 @@ export async function callReplicate(messages: ChatMessage[]): Promise<string> {
     
     const prompt = `${systemPrompt}\n\n${conversationHistory}\n\nAsistente:`;
 
-    const output = await replicate.run("mistralai/mistral-7b-instruct-v0.1", {
+    const output = await replicate.run("meta/llama-2-7b-chat", {
       input: {
         prompt: prompt,
         max_length: 1024,
