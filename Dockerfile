@@ -1,7 +1,8 @@
 FROM ollama/ollama:latest
 
-RUN ollama pull mistral
-
 EXPOSE 11434
 
-CMD ["ollama", "serve"]
+# Crear script de startup que baja el modelo
+RUN echo '#!/bin/bash\nollama serve &\nsleep 10\nollama pull mistral\nwait' > /start.sh && chmod +x /start.sh
+
+CMD ["/start.sh"]
