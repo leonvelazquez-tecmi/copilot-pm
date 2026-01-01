@@ -35,8 +35,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Error en /api/chat:", error);
+    const errorMessage = error instanceof Error ? error.message : "Error al procesar la solicitud";
     return NextResponse.json(
-      { error: "Error al procesar la solicitud" },
+      { error: errorMessage },
       { status: 500 }
     );
   }

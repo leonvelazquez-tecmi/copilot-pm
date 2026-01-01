@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { PDFUploadCard } from '@/components/PDFUploadCard';
 
 interface Message {
   role: "user" | "assistant";
@@ -11,6 +13,7 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('agent');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -49,18 +52,20 @@ export default function Home() {
       });
 
       if (!response.ok) {
-        throw new Error("Error al obtener respuesta");
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Error ${response.status}: Error al obtener respuesta`);
       }
 
       const data = await response.json();
       setMessages((prev) => [...prev, { role: "assistant", content: data.content }]);
     } catch (error) {
       console.error("Error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Error desconocido";
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: "Lo siento, hubo un error al procesar tu mensaje. Por favor, intenta de nuevo.",
+          content: `Lo siento, hubo un error al procesar tu mensaje: ${errorMessage}. Por favor, intenta de nuevo.`,
         },
       ]);
     } finally {
@@ -89,86 +94,108 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Messages Container */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-4xl px-4 py-6">
-          {messages.length === 0 ? (
-            <div className="flex h-full items-center justify-center">
-              <div className="text-center">
-                <h2 className="mb-2 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-                  Bienvenido al PM Co-piloto
-                </h2>
-                <p className="text-zinc-600 dark:text-zinc-400">
-                  Comienza una conversación sobre tu proyecto
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {messages.map((message, index) => (
-                <div
-                  key={index}
-                  className={`flex ${
-                    message.role === "user" ? "justify-end" : "justify-start"
-                  }`}
-                >
-                  <div
-                    className={`max-w-[80%] rounded-lg px-4 py-3 ${
-                      message.role === "user"
-                        ? "bg-blue-600 text-white"
-                        : "bg-white text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50"
-                    }`}
-                  >
-                    <p className="whitespace-pre-wrap break-words">{message.content}</p>
-                  </div>
-                </div>
-              ))}
-              {isLoading && (
-                <div className="flex justify-start">
-                  <div className="max-w-[80%] rounded-lg bg-white px-4 py-3 dark:bg-zinc-800">
-                    <div className="flex space-x-2">
-                      <div className="h-2 w-2 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.3s]"></div>
-                      <div className="h-2 w-2 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.15s]"></div>
-                      <div className="h-2 w-2 animate-bounce rounded-full bg-zinc-400"></div>
-                    </div>
-                  </div>
-                </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Input Area */}
-      <div className="border-t border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="mx-auto max-w-4xl px-4 py-4">
-          <div className="flex gap-2">
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Escribe tu mensaje..."
-              disabled={isLoading}
-              rows={1}
-              className="flex-1 resize-none rounded-lg border border-zinc-300 bg-white px-4 py-3 text-zinc-900 placeholder-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-50 dark:placeholder-zinc-500"
-              style={{
-                minHeight: "48px",
-                maxHeight: "200px",
-                overflowY: "auto",
-              }}
-            />
-            <button
-              onClick={handleSend}
-              disabled={!input.trim() || isLoading}
-              className="rounded-lg bg-blue-600 px-6 py-3 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-            >
-              {isLoading ? "Enviando..." : "Enviar"}
-            </button>
+      {/* Tab Navigation */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+        <div className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="mx-auto max-w-4xl px-4 py-2">
+            <TabsList className="grid w-full max-w-md mx-auto grid-cols-2">
+              <TabsTrigger value="agent">Agent Mode</TabsTrigger>
+              <TabsTrigger value="debug">Debug Mode</TabsTrigger>
+            </TabsList>
           </div>
         </div>
-      </div>
+
+        {/* Agent Mode: Chat Interface (Release 1) */}
+        <TabsContent value="agent" className="flex-1 flex flex-col m-0 mt-0">
+          {/* Messages Container */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="mx-auto max-w-4xl px-4 py-6">
+              {messages.length === 0 ? (
+                <div className="flex h-full items-center justify-center">
+                  <div className="text-center">
+                    <h2 className="mb-2 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+                      Bienvenido al PM Co-piloto
+                    </h2>
+                    <p className="text-zinc-600 dark:text-zinc-400">
+                      Comienza una conversación sobre tu proyecto
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {messages.map((message, index) => (
+                    <div
+                      key={index}
+                      className={`flex ${
+                        message.role === "user" ? "justify-end" : "justify-start"
+                      }`}
+                    >
+                      <div
+                        className={`max-w-[80%] rounded-lg px-4 py-3 ${
+                          message.role === "user"
+                            ? "bg-blue-600 text-white"
+                            : "bg-white text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50"
+                        }`}
+                      >
+                        <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                      </div>
+                    </div>
+                  ))}
+                  {isLoading && (
+                    <div className="flex justify-start">
+                      <div className="max-w-[80%] rounded-lg bg-white px-4 py-3 dark:bg-zinc-800">
+                        <div className="flex space-x-2">
+                          <div className="h-2 w-2 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.3s]"></div>
+                          <div className="h-2 w-2 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.15s]"></div>
+                          <div className="h-2 w-2 animate-bounce rounded-full bg-zinc-400"></div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Input Area */}
+          <div className="border-t border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="mx-auto max-w-4xl px-4 py-4">
+              <div className="flex gap-2">
+                <textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Escribe tu mensaje..."
+                  disabled={isLoading}
+                  rows={1}
+                  className="flex-1 resize-none rounded-lg border border-zinc-300 bg-white px-4 py-3 text-zinc-900 placeholder-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-50 dark:placeholder-zinc-500"
+                  style={{
+                    minHeight: "48px",
+                    maxHeight: "200px",
+                    overflowY: "auto",
+                  }}
+                />
+                <button
+                  onClick={handleSend}
+                  disabled={!input.trim() || isLoading}
+                  className="rounded-lg bg-blue-600 px-6 py-3 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                >
+                  {isLoading ? "Enviando..." : "Enviar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* Debug Mode: PDF Upload (Release 2 - Feature 1) */}
+        <TabsContent value="debug" className="flex-1 overflow-y-auto m-0 mt-0">
+          <div className="mx-auto max-w-4xl px-4 py-6">
+            <PDFUploadCard />
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
