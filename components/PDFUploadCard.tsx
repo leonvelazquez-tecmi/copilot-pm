@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertCircle, CheckCircle, FileUp, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { validateCharterStructure, ValidationResult } from '@/lib/validators/charterValidator';
+import { ValidationResultsCard } from '@/components/charter/ValidationResultsCard';
 
 export function PDFUploadCard() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -13,6 +15,8 @@ export function PDFUploadCard() {
   const [isExtracting, setIsExtracting] = useState(false);
   const [showText, setShowText] = useState(false);
   const [extractionError, setExtractionError] = useState<string | null>(null);
+  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
 
   const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -43,6 +47,7 @@ export function PDFUploadCard() {
     setExtractedText(null);
     setExtractionError(null);
     setShowText(false);
+    setValidationResult(null);
     
     // Automatically extract text after file selection
     handleExtractText(file);
@@ -70,6 +75,11 @@ export function PDFUploadCard() {
       const data = await response.json();
       setExtractedText(data.text);
       setExtractionError(null);
+      
+      // Automatically validate after successful extraction
+      if (data.text && data.text.trim().length > 0) {
+        validateText(data.text);
+      }
     } catch (error) {
       console.error('Error extracting text:', error);
       const errorMessage = error instanceof Error ? error.message : 'Error desconocido al extraer texto';
@@ -77,6 +87,20 @@ export function PDFUploadCard() {
       setExtractedText(null);
     } finally {
       setIsExtracting(false);
+    }
+  };
+
+  const validateText = (text: string) => {
+    setIsValidating(true);
+    try {
+      const result = validateCharterStructure(text);
+      setValidationResult(result);
+      // Collapse text by default after validation
+      setShowText(false);
+    } catch (error) {
+      console.error('Error validating charter:', error);
+    } finally {
+      setIsValidating(false);
     }
   };
 
@@ -88,6 +112,8 @@ export function PDFUploadCard() {
     setExtractionError(null);
     setShowText(false);
     setIsExtracting(false);
+    setValidationResult(null);
+    setIsValidating(false);
   };
 
   const fileSizeDisplay = selectedFile
@@ -164,6 +190,19 @@ export function PDFUploadCard() {
                   <p className="text-xs text-red-600 dark:text-red-400 mt-1">{extractionError}</p>
                 </div>
               </div>
+            )}
+
+            {/* Validation Loading */}
+            {isValidating && !isExtracting && extractedText && (
+              <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-md dark:bg-blue-950/20 dark:border-blue-900">
+                <Loader2 className="w-4 h-4 text-blue-600 dark:text-blue-400 animate-spin" />
+                <p className="text-sm text-blue-700 dark:text-blue-300">Analizando estructura del charter...</p>
+              </div>
+            )}
+
+            {/* Validation Results */}
+            {validationResult && !isValidating && !isExtracting && extractedText && (
+              <ValidationResultsCard result={validationResult} />
             )}
 
             {/* Extracted Text Preview */}
