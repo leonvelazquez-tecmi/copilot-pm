@@ -6,6 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { AlertCircle, CheckCircle, FileUp, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { validateCharterStructure, ValidationResult } from '@/lib/validators/charterValidator';
 import { ValidationResultsCard } from '@/components/charter/ValidationResultsCard';
+import { ClaudeAnalysis } from '@/lib/api/claudeCharterAnalyzer';
+import { ClaudeAnalysisCard } from '@/components/charter/ClaudeAnalysisCard';
 
 export function PDFUploadCard() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -17,6 +19,9 @@ export function PDFUploadCard() {
   const [extractionError, setExtractionError] = useState<string | null>(null);
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [isValidating, setIsValidating] = useState(false);
+  const [claudeAnalysis, setClaudeAnalysis] = useState<ClaudeAnalysis | null>(null);
+  const [analyzingWithClaude, setAnalyzingWithClaude] = useState(false);
+  const [claudeAnalysisError, setClaudeAnalysisError] = useState<string | null>(null);
 
   const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -48,6 +53,8 @@ export function PDFUploadCard() {
     setExtractionError(null);
     setShowText(false);
     setValidationResult(null);
+    setClaudeAnalysis(null);
+    setClaudeAnalysisError(null);
     
     // Automatically extract text after file selection
     handleExtractText(file);
@@ -97,10 +104,48 @@ export function PDFUploadCard() {
       setValidationResult(result);
       // Collapse text by default after validation
       setShowText(false);
+      
+      // Trigger Claude analysis after structural validation
+      analyzeWithClaude(text, result);
     } catch (error) {
       console.error('Error validating charter:', error);
     } finally {
       setIsValidating(false);
+    }
+  };
+
+  const analyzeWithClaude = async (text: string, validation: ValidationResult) => {
+    setAnalyzingWithClaude(true);
+    setClaudeAnalysisError(null);
+    setClaudeAnalysis(null);
+
+    try {
+      const response = await fetch('/api/analyze-charter', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text,
+          structuralValidation: validation,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Error al analizar charter con Claude');
+      }
+
+      const analysis = await response.json();
+      setClaudeAnalysis(analysis);
+      setClaudeAnalysisError(null);
+    } catch (error) {
+      console.error('Error analyzing charter with Claude:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Error desconocido al analizar charter';
+      setClaudeAnalysisError(errorMessage);
+      setClaudeAnalysis(null);
+    } finally {
+      setAnalyzingWithClaude(false);
     }
   };
 
@@ -114,6 +159,9 @@ export function PDFUploadCard() {
     setIsExtracting(false);
     setValidationResult(null);
     setIsValidating(false);
+    setClaudeAnalysis(null);
+    setAnalyzingWithClaude(false);
+    setClaudeAnalysisError(null);
   };
 
   const fileSizeDisplay = selectedFile
@@ -203,6 +251,30 @@ export function PDFUploadCard() {
             {/* Validation Results */}
             {validationResult && !isValidating && !isExtracting && extractedText && (
               <ValidationResultsCard result={validationResult} />
+            )}
+
+            {/* Claude Analysis Loading */}
+            {analyzingWithClaude && !isExtracting && extractedText && (
+              <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-md dark:bg-blue-950/20 dark:border-blue-900">
+                <Loader2 className="w-4 h-4 text-blue-600 dark:text-blue-400 animate-spin" />
+                <p className="text-sm text-blue-700 dark:text-blue-300">Analizando contenido cualitativo con IA...</p>
+              </div>
+            )}
+
+            {/* Claude Analysis Error */}
+            {claudeAnalysisError && !analyzingWithClaude && !isExtracting && extractedText && (
+              <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded-md dark:bg-red-950/20 dark:border-red-900">
+                <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-red-700 dark:text-red-300">Error en análisis cualitativo</p>
+                  <p className="text-xs text-red-600 dark:text-red-400 mt-1">{claudeAnalysisError}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Claude Analysis Results */}
+            {claudeAnalysis && !analyzingWithClaude && !isExtracting && extractedText && (
+              <ClaudeAnalysisCard analysis={claudeAnalysis} />
             )}
 
             {/* Extracted Text Preview */}

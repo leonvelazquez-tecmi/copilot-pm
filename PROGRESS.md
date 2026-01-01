@@ -20,11 +20,18 @@
   - Extracción automática después de subir archivo
   - Preview del texto extraído en UI
   
-- ⚠️ **Feature 3**: [Por definir - Ver nota para arquitecto]
+- ✅ **Feature 3**: Charter Structure Validator (Completado)
+  - Validador basado en keywords para 8 secciones PMI estándar
+  - Cálculo de completitud global (0-100%)
+  - Cálculo de confianza por sección (high/medium/low)
+  - Componente ValidationResultsCard con UI completa
   
-- ⏳ **Feature 4**: Integración con Claude para validar PDF (Pendiente)
-  - Enviar texto extraído a Claude para validación
-  - Generar feedback y sugerencias de mejoras
+- ✅ **Feature 4**: Integración Claude para Análisis Cualitativo (Completado)
+  - Análisis cualitativo profundo con Claude API
+  - Evaluación de: objetivos SMART, business case, riesgos, scope, stakeholders, timeline/budget
+  - Score general (0-100), fortalezas, debilidades, recomendaciones priorizadas, red flags
+  - Componente ClaudeAnalysisCard con UI completa
+  - Integración automática después de validación estructural
 
 ## Stack técnico
 
@@ -51,6 +58,14 @@
   - Tipo: Component (default export)
   - Funcionalidades: Placeholder para el flujo de creación de proyectos (Release 2 - pendiente de implementación)
 
+- **Componente Validation Results**: `components/charter/ValidationResultsCard.tsx`
+  - Tipo: Client Component
+  - Funcionalidades: Muestra resultados de validación estructural (completitud, secciones encontradas/faltantes, sugerencias)
+
+- **Componente Claude Analysis**: `components/charter/ClaudeAnalysisCard.tsx`
+  - Tipo: Client Component
+  - Funcionalidades: Muestra análisis cualitativo de Claude (score, fortalezas, debilidades, recomendaciones priorizadas, red flags)
+
 ### Archivos clave
 
 #### Release 1
@@ -67,10 +82,15 @@
   - Requiere Uint8Array (no Buffer)
   - Configura GlobalWorkerOptions con ruta file://
   - Polyfills para DOMMatrix (Node.js)
-- `components/PDFUploadCard.tsx` - Componente para upload y validación de PDFs
+- `components/PDFUploadCard.tsx` - Componente para upload y validación de PDFs (integra Features 2, 3 y 4)
 - `components/intake/IntakeFlowPlaceholder.tsx` - Placeholder para el flujo de intake/creación de proyectos
+- `components/charter/ValidationResultsCard.tsx` - Componente para mostrar validación estructural (Feature 3)
+- `components/charter/ClaudeAnalysisCard.tsx` - Componente para mostrar análisis cualitativo de Claude (Feature 4)
+- `lib/validators/charterValidator.ts` - Validador de estructura basado en keywords (Feature 3)
+- `lib/api/claudeCharterAnalyzer.ts` - Analizador de charters usando Claude API (Feature 4)
+- `app/api/analyze-charter/route.ts` - Endpoint POST `/api/analyze-charter` para análisis cualitativo (Feature 4)
 - `scripts/clean-dev.js` - Script para limpiar procesos antes de iniciar servidor
-- `components/ui/` - Componentes Shadcn/UI (tabs, card, button)
+- `components/ui/` - Componentes Shadcn/UI (tabs, card, button, progress, badge)
 
 ### Flujo de datos
 
@@ -81,37 +101,43 @@
 4. `lib/anthropic.ts` → API de Anthropic
 5. Respuesta → UI actualizada con mensaje del asistente
 
-#### Release 2: PDF Processing
+#### Release 2: PDF Processing y Análisis
 1. Usuario selecciona PDF → `components/PDFUploadCard.tsx`
 2. Validación (tipo, tamaño) → Extracción automática
 3. `handleExtractText()` → POST a `/api/pdf/extract`
 4. `app/api/pdf/extract/route.ts` → pdfjs-dist extrae texto
-5. Texto extraído → UI muestra preview
-6. (Feature 4): Botón "Validate & Get Feedback" → Enviar a Claude
+5. Validación estructural → `validateCharterStructure()` (Feature 3)
+6. `ValidationResultsCard` muestra completitud y secciones
+7. Análisis Claude → POST a `/api/analyze-charter` (Feature 4)
+8. `app/api/analyze-charter/route.ts` → `analyzeCharterWithClaude()` 
+9. `ClaudeAnalysisCard` muestra score, fortalezas, debilidades, recomendaciones y red flags
+10. Texto extraído disponible (colapsable)
 
-## Nota para el Arquitecto
+## Estado de Release 2
 
-**Feature 3 no está definido en el plan actual.**
+**Todas las Features planificadas están completadas:**
 
-Hemos completado:
+- ✅ Feature 1: PDF Upload Component + Tab Navigation
+- ✅ Feature 2: PDF Text Extraction
+- ✅ Feature 3: Charter Structure Validator (validación basada en keywords)
+- ✅ Feature 4: Integración Claude para Análisis Cualitativo
+
+**Flujo completo funcional:**
+1. Usuario sube PDF en tab "Mejorar"
+2. Extracción automática de texto
+3. Validación estructural instantánea (Feature 3) - muestra completitud y secciones encontradas/faltantes
+4. Análisis cualitativo automático con Claude (Feature 4) - muestra score, fortalezas, debilidades, recomendaciones priorizadas y red flags
+5. Ambos análisis se muestran simultáneamente en la UI
+
+## Release 2 - Completado ✅
+
+Todas las Features planificadas están implementadas y funcionales:
 - Feature 1: PDF Upload Component + Tab Navigation ✅
 - Feature 2: PDF Text Extraction ✅
+- Feature 3: Charter Structure Validator ✅
+- Feature 4: Integración Claude para Análisis Cualitativo ✅
 
-El siguiente paso lógico sería Feature 4 (Integración con Claude para validar PDF), pero no hay un Feature 3 definido. 
-
-**Pregunta**: ¿Hay algún Feature 3 que deba implementarse antes de Feature 4? Por ejemplo:
-- Procesamiento adicional del texto extraído
-- Almacenamiento temporal del PDF/texto
-- Validaciones adicionales
-- O podemos proceder directamente a Feature 4?
-
-## Próximos pasos (Release 2 - Pendientes)
-
-- [ ] **Feature 3**: [Por definir]
-- [ ] **Feature 4**: Integración con Claude para validar PDF
-  - Endpoint para enviar texto extraído a Claude
-  - System prompt específico para validación de charters
-  - UI para mostrar feedback y sugerencias
+## Próximos pasos (Release 3)
 
 ## Release 3 (Futuro)
 
@@ -134,7 +160,29 @@ El siguiente paso lógico sería Feature 4 (Integración con Claude para validar
 
 ## Notas técnicas
 
+### PDF Processing
 - **pdfjs-dist**: Usamos el build legacy (`pdfjs-dist/legacy/build/pdf.mjs`) para compatibilidad con Node.js
 - **GlobalWorkerOptions**: Configurado con ruta `file://` completa al worker file
 - **DOMMatrix Polyfills**: Necesarios para pdfjs-dist en entorno Node.js
+
+### Claude API Integration
+- **Modelo**: `claude-sonnet-4-5` (mismo que Release 1)
+- **Max tokens análisis**: 4000 (aumentado de 2000 para evitar truncamiento de JSON)
+- **System prompt**: Especializado en estándares PMI y análisis de charters
+- **Parsing JSON**: Manejo robusto de markdown code blocks y detección de truncamiento
+- **Manejo de errores**: Rate limits (429), timeouts (408, 504), JSON malformado
+
+### Validación Estructural (Feature 3)
+- **Enfoque**: Keyword-based (sin NLP externo)
+- **Secciones PMI**: 8 secciones estándar detectadas por keywords en español e inglés
+- **Confianza**: High (3+ keywords), Medium (1-2 keywords), Low (0 keywords)
+- **Completitud**: Cálculo basado en secciones encontradas vs total
+
+### Análisis Cualitativo (Feature 4)
+- **Enfoque**: Análisis profundo con Claude API
+- **Evalúa**: Objetivos SMART, business case, riesgos, scope, stakeholders, timeline/budget
+- **Output**: Score (0-100), fortalezas, debilidades, recomendaciones priorizadas, red flags
+- **Integración**: Automática después de validación estructural
+
+### Otros
 - **Script de limpieza**: `scripts/clean-dev.js` elimina procesos bloqueantes antes de iniciar servidor
