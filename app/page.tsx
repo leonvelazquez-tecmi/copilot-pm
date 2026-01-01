@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PDFUploadCard } from '@/components/PDFUploadCard';
+import IntakeFlowPlaceholder from '@/components/intake/IntakeFlowPlaceholder';
 
 interface Message {
   role: "user" | "assistant";
@@ -98,9 +99,10 @@ export default function Home() {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
         <div className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
           <div className="mx-auto max-w-4xl px-4 py-2">
-            <TabsList className="grid w-full max-w-md mx-auto grid-cols-2">
-              <TabsTrigger value="agent">Agent Mode</TabsTrigger>
-              <TabsTrigger value="debug">Debug Mode</TabsTrigger>
+            <TabsList className="grid w-full max-w-md mx-auto grid-cols-3">
+              <TabsTrigger value="agent">Chat Libre</TabsTrigger>
+              <TabsTrigger value="intake">Crear Proyecto</TabsTrigger>
+              <TabsTrigger value="debug">Mejorar</TabsTrigger>
             </TabsList>
           </div>
         </div>
@@ -186,6 +188,13 @@ export default function Home() {
                 </button>
               </div>
             </div>
+          </div>
+        </TabsContent>
+
+        {/* Intake Flow: Crear Proyecto (Release 2 - Placeholder) */}
+        <TabsContent value="intake" className="flex-1 overflow-y-auto m-0 mt-0">
+          <div className="mx-auto max-w-4xl px-4 py-6">
+            <IntakeFlowPlaceholder />
           </div>
         </TabsContent>
 
