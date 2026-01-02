@@ -1,173 +1,284 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertCircle, CheckCircle, FileUp, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
-import { validateCharterStructure, ValidationResult } from '@/lib/validators/charterValidator';
-import { ValidationResultsCard } from '@/components/charter/ValidationResultsCard';
+import { AlertCircle, FileUp, Loader2, Upload } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { ClaudeAnalysis } from '@/lib/api/claudeCharterAnalyzer';
-import { ClaudeAnalysisCard } from '@/components/charter/ClaudeAnalysisCard';
+import ProjectContextSelector, { ProjectType, ProjectStage } from '@/components/charter/ProjectContextSelector';
+import { SideBySideView } from '@/components/charter/SideBySideView';
 
 export function PDFUploadCard() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-  const [extractedText, setExtractedText] = useState<string | null>(null);
-  const [isExtracting, setIsExtracting] = useState(false);
-  const [showText, setShowText] = useState(false);
-  const [extractionError, setExtractionError] = useState<string | null>(null);
-  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
-  const [isValidating, setIsValidating] = useState(false);
+  const [extractedText, setExtractedText] = useState<string>('');
   const [claudeAnalysis, setClaudeAnalysis] = useState<ClaudeAnalysis | null>(null);
+  const [isExtracting, setIsExtracting] = useState(false);
   const [analyzingWithClaude, setAnalyzingWithClaude] = useState(false);
-  const [claudeAnalysisError, setClaudeAnalysisError] = useState<string | null>(null);
+  const [projectType, setProjectType] = useState<ProjectType | null>(null);
+  const [projectStage, setProjectStage] = useState<ProjectStage | null>(null);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+  const isContextComplete = projectType !== null && projectStage !== null;
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setError(null);
-    setSuccess(false);
-
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (file) {
+      processFile(file);
+    }
+  };
 
-    // Validation: Type
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const droppedFile = event.dataTransfer.files[0];
+    if (droppedFile && droppedFile.type === 'application/pdf') {
+      processFile(droppedFile);
+    }
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+  };
+
+  const processFile = async (file: File) => {
     if (file.type !== 'application/pdf') {
-      setError('Only PDF files are allowed. Please select a valid PDF.');
-      setSelectedFile(null);
+      setError('Solo se permiten archivos PDF');
       return;
     }
 
-    // Validation: Size
     if (file.size > MAX_FILE_SIZE) {
-      setError(`File is too large. Maximum size is 10 MB. Your file: ${(file.size / 1024 / 1024).toFixed(2)} MB`);
-      setSelectedFile(null);
+      setError('El archivo no puede exceder 10 MB');
       return;
     }
 
-    // Success
     setSelectedFile(file);
-    setSuccess(true);
-    setExtractedText(null);
-    setExtractionError(null);
-    setShowText(false);
-    setValidationResult(null);
-    setClaudeAnalysis(null);
-    setClaudeAnalysisError(null);
-    
-    // Automatically extract text after file selection
-    handleExtractText(file);
-  };
-
-  const handleExtractText = async (file: File) => {
+    setError(null);
     setIsExtracting(true);
-    setExtractionError(null);
-    setExtractedText(null);
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
+      const text = await extractTextFromPDF(file);
+      setExtractedText(text);
 
-      const response = await fetch('/api/pdf/extract', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Error al extraer texto del PDF');
+      // Ensure context is complete
+      if (!projectType || !projectStage) {
+        throw new Error('Project context must be selected before analysis');
       }
 
-      const data = await response.json();
-      setExtractedText(data.text);
-      setExtractionError(null);
-      
-      // Automatically validate after successful extraction
-      if (data.text && data.text.trim().length > 0) {
-        validateText(data.text);
-      }
-    } catch (error) {
-      console.error('Error extracting text:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Error desconocido al extraer texto';
-      setExtractionError(errorMessage);
-      setExtractedText(null);
-    } finally {
       setIsExtracting(false);
-    }
-  };
 
-  const validateText = (text: string) => {
-    setIsValidating(true);
-    try {
-      const result = validateCharterStructure(text);
-      setValidationResult(result);
-      // Collapse text by default after validation
-      setShowText(false);
+      // Automatically start Claude analysis
+      setAnalyzingWithClaude(true);
       
-      // Trigger Claude analysis after structural validation
-      analyzeWithClaude(text, result);
-    } catch (error) {
-      console.error('Error validating charter:', error);
-    } finally {
-      setIsValidating(false);
-    }
-  };
-
-  const analyzeWithClaude = async (text: string, validation: ValidationResult) => {
-    setAnalyzingWithClaude(true);
-    setClaudeAnalysisError(null);
-    setClaudeAnalysis(null);
-
-    try {
       const response = await fetch('/api/analyze-charter', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text,
-          structuralValidation: validation,
-        }),
+          projectType,
+          projectStage
+        })
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Error al analizar charter con Claude');
+        throw new Error('Failed to analyze charter');
       }
 
       const analysis = await response.json();
       setClaudeAnalysis(analysis);
-      setClaudeAnalysisError(null);
-    } catch (error) {
-      console.error('Error analyzing charter with Claude:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Error desconocido al analizar charter';
-      setClaudeAnalysisError(errorMessage);
-      setClaudeAnalysis(null);
+      
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error procesando el archivo');
     } finally {
+      setIsExtracting(false);
       setAnalyzingWithClaude(false);
     }
   };
 
-  const handleClearFile = () => {
-    setSelectedFile(null);
-    setError(null);
-    setSuccess(false);
-    setExtractedText(null);
-    setExtractionError(null);
-    setShowText(false);
-    setIsExtracting(false);
-    setValidationResult(null);
-    setIsValidating(false);
-    setClaudeAnalysis(null);
-    setAnalyzingWithClaude(false);
-    setClaudeAnalysisError(null);
+  const extractTextFromPDF = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch('/api/pdf/extract', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Error al extraer texto del PDF');
+    }
+
+    const data = await response.json();
+    return data.text;
   };
 
-  const fileSizeDisplay = selectedFile
-    ? `${(selectedFile.size / 1024).toFixed(2)} KB`
-    : null;
+  const handleClear = () => {
+    setSelectedFile(null);
+    setExtractedText('');
+    setClaudeAnalysis(null);
+    setError(null);
+    setProjectType(null);
+    setProjectStage(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
+  // Show results (single view - no tabs)
+  if (selectedFile && claudeAnalysis && !analyzingWithClaude && !isExtracting) {
+    return (
+      <div className="flex flex-col h-full">
+        {/* Header with key metrics */}
+        <div className="border-b border-zinc-700 bg-zinc-900 p-4">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <h2 className="text-xl font-bold text-zinc-100 mb-1">
+                📊 Análisis de Tu Charter
+              </h2>
+              <p className="text-sm text-zinc-400">
+                {selectedFile.name} • {(selectedFile.size / 1024).toFixed(2)} KB
+              </p>
+            </div>
+            <Button onClick={handleClear} variant="outline" size="sm">
+              Analizar Otro Charter
+            </Button>
+          </div>
+
+          {/* Key Metrics Row */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            {/* Overall Score */}
+            <Card className="border-zinc-700 bg-zinc-800">
+              <CardContent className="pt-4">
+                <div className="text-center">
+                  <p className="text-sm text-zinc-400 mb-1">Score General</p>
+                  <p className="text-3xl font-bold text-zinc-100">
+                    {claudeAnalysis.overallScore}
+                    <span className="text-lg text-zinc-400">/100</span>
+                  </p>
+                  <Badge 
+                    variant={
+                      claudeAnalysis.overallScore >= 80 ? 'default' :
+                      claudeAnalysis.overallScore >= 60 ? 'secondary' :
+                      'destructive'
+                    }
+                    className="mt-2"
+                  >
+                    {claudeAnalysis.overallScore >= 80 ? '✅ Excelente' :
+                     claudeAnalysis.overallScore >= 60 ? '🟡 Mejorable' :
+                     '🔴 Necesita Trabajo'}
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Completeness */}
+            <Card className="border-zinc-700 bg-zinc-800">
+              <CardContent className="pt-4">
+                <div className="text-center">
+                  <p className="text-sm text-zinc-400 mb-1">Completitud Estructural</p>
+                  <p className="text-3xl font-bold text-zinc-100">
+                    {claudeAnalysis.overallCompleteness}
+                    <span className="text-lg text-zinc-400">%</span>
+                  </p>
+                  <div className="w-full bg-zinc-700 rounded-full h-2 mt-2">
+                    <div 
+                      className="bg-amber-500 h-2 rounded-full transition-all"
+                      style={{ width: `${claudeAnalysis.overallCompleteness}%` }}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Context Badges */}
+            <Card className="border-zinc-700 bg-zinc-800">
+              <CardContent className="pt-4">
+                <div className="text-center">
+                  <p className="text-sm text-zinc-400 mb-2">Contexto del Proyecto</p>
+                  <div className="flex flex-col gap-2 items-center">
+                    <Badge variant="outline" className="border-blue-500 text-blue-400">
+                      {claudeAnalysis.projectType === 'strategic' ? 'Estratégico' : 'Operativo'}
+                    </Badge>
+                    <Badge variant="outline" className="border-purple-500 text-purple-400">
+                      {claudeAnalysis.projectStage === 'shaping' ? 'Shaping' :
+                       claudeAnalysis.projectStage === 'draft' ? 'Draft' :
+                       'Ready'}
+                    </Badge>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Critical Alerts */}
+          {claudeAnalysis.redFlags && claudeAnalysis.redFlags.length > 0 && (
+            <Card className="border-red-500/50 bg-red-950/20">
+              <CardContent className="pt-4">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-red-400 mb-2">
+                      🚩 Alertas Críticas ({claudeAnalysis.redFlags.length})
+                    </p>
+                    <ul className="space-y-1">
+                      {claudeAnalysis.redFlags.slice(0, 3).map((flag, idx) => (
+                        <li key={idx} className="text-sm text-zinc-300">
+                          • {flag}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Main Content: Side-by-Side View (scrollable) */}
+        <div className="flex-1 overflow-y-auto">
+          <SideBySideView
+            extractedText={extractedText}
+            claudeAnalysis={claudeAnalysis}
+          />
+        </div>
+
+        {/* Footer with action buttons */}
+        <div className="border-t border-zinc-700 bg-zinc-900 p-4">
+          <div className="flex gap-3 justify-center">
+            <Button variant="outline" size="sm">
+              📋 Copiar Recomendaciones
+            </Button>
+            <Button variant="outline" size="sm">
+              💾 Exportar Reporte PDF
+            </Button>
+            <Button onClick={handleClear} variant="default" size="sm">
+              🔄 Analizar Otra Versión
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading state
+  if (isExtracting || analyzingWithClaude) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-8">
+        <Loader2 className="h-12 w-12 animate-spin text-blue-500 mb-4" />
+        <p className="text-lg text-zinc-300 mb-2">
+          {isExtracting ? 'Extrayendo texto del PDF...' : 'Analizando charter con IA...'}
+        </p>
+        <p className="text-sm text-zinc-500">
+          Esto puede tomar unos segundos
+        </p>
+      </div>
+    );
+  }
+
+  // Show initial upload UI
   return (
     <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
@@ -176,152 +287,57 @@ export function PDFUploadCard() {
           Upload your existing project charter (PDF) and let AI help you strengthen it
         </CardDescription>
       </CardHeader>
-
       <CardContent className="space-y-4">
-        {/* Upload Input */}
-        <div className="flex items-center justify-center w-full">
-          <label htmlFor="pdf-upload" className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800">
-            <div className="flex flex-col items-center justify-center pt-5 pb-6">
-              <FileUp className="w-8 h-8 text-gray-400 mb-2" />
-              <p className="text-sm text-gray-500 dark:text-zinc-400">
-                <span className="font-semibold">Click to upload</span> or drag and drop
-              </p>
-              <p className="text-xs text-gray-400 dark:text-zinc-500">PDF only, max 10 MB</p>
-            </div>
-            <input
-              id="pdf-upload"
-              type="file"
-              accept=".pdf"
-              onChange={handleFileSelect}
-              className="hidden"
-            />
-          </label>
-        </div>
+        {/* Project Context Selector and Upload */}
+        <div className="space-y-4">
+          {/* Step 1: Project Context Selector */}
+          <ProjectContextSelector
+            projectType={projectType}
+            projectStage={projectStage}
+            onProjectTypeChange={setProjectType}
+            onProjectStageChange={setProjectStage}
+          />
 
-        {/* Error State */}
-        {error && (
-          <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded-md dark:bg-red-950/20 dark:border-red-900">
-            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
-            <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-          </div>
-        )}
-
-        {/* Success State */}
-        {success && selectedFile && (
-          <div className="space-y-3">
-            <div className="flex items-start gap-3 p-3 bg-green-50 border border-green-200 rounded-md dark:bg-green-950/20 dark:border-green-900">
-              <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-green-700 dark:text-green-300">
-                  {isExtracting ? 'Extrayendo texto...' : extractedText ? 'Texto extraído exitosamente' : 'File ready for validation'}
-                </p>
-                <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                  {selectedFile.name} • {fileSizeDisplay}
-                </p>
-              </div>
-            </div>
-
-            {/* Extraction Loading */}
-            {isExtracting && (
-              <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-md dark:bg-blue-950/20 dark:border-blue-900">
-                <Loader2 className="w-4 h-4 text-blue-600 dark:text-blue-400 animate-spin" />
-                <p className="text-sm text-blue-700 dark:text-blue-300">Procesando PDF...</p>
-              </div>
-            )}
-
-            {/* Extraction Error */}
-            {extractionError && !isExtracting && (
-              <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded-md dark:bg-red-950/20 dark:border-red-900">
-                <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-red-700 dark:text-red-300">Error al extraer texto</p>
-                  <p className="text-xs text-red-600 dark:text-red-400 mt-1">{extractionError}</p>
-                </div>
-              </div>
-            )}
-
-            {/* Validation Loading */}
-            {isValidating && !isExtracting && extractedText && (
-              <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-md dark:bg-blue-950/20 dark:border-blue-900">
-                <Loader2 className="w-4 h-4 text-blue-600 dark:text-blue-400 animate-spin" />
-                <p className="text-sm text-blue-700 dark:text-blue-300">Analizando estructura del charter...</p>
-              </div>
-            )}
-
-            {/* Validation Results */}
-            {validationResult && !isValidating && !isExtracting && extractedText && (
-              <ValidationResultsCard result={validationResult} />
-            )}
-
-            {/* Claude Analysis Loading */}
-            {analyzingWithClaude && !isExtracting && extractedText && (
-              <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-md dark:bg-blue-950/20 dark:border-blue-900">
-                <Loader2 className="w-4 h-4 text-blue-600 dark:text-blue-400 animate-spin" />
-                <p className="text-sm text-blue-700 dark:text-blue-300">Analizando contenido cualitativo con IA...</p>
-              </div>
-            )}
-
-            {/* Claude Analysis Error */}
-            {claudeAnalysisError && !analyzingWithClaude && !isExtracting && extractedText && (
-              <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded-md dark:bg-red-950/20 dark:border-red-900">
-                <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-red-700 dark:text-red-300">Error en análisis cualitativo</p>
-                  <p className="text-xs text-red-600 dark:text-red-400 mt-1">{claudeAnalysisError}</p>
-                </div>
-              </div>
-            )}
-
-            {/* Claude Analysis Results */}
-            {claudeAnalysis && !analyzingWithClaude && !isExtracting && extractedText && (
-              <ClaudeAnalysisCard analysis={claudeAnalysis} />
-            )}
-
-            {/* Extracted Text Preview */}
-            {extractedText && !isExtracting && (
-              <div className="space-y-2">
-                <button
-                  onClick={() => setShowText(!showText)}
-                  className="flex items-center justify-between w-full p-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md transition"
+          {/* Step 2: PDF Upload (only show if context is complete) */}
+          {isContextComplete && (
+            <Card className="border-zinc-700 bg-zinc-900">
+              <CardHeader>
+                <CardTitle className="text-zinc-100">Sube tu Charter</CardTitle>
+                <CardDescription className="text-zinc-400">
+                  Archivo PDF, máximo 10 MB
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  className="border-2 border-dashed border-zinc-700 rounded-lg p-8 text-center hover:border-zinc-600 cursor-pointer transition-colors"
                 >
-                  <span>Texto extraído ({extractedText.length} caracteres)</span>
-                  {showText ? (
-                    <ChevronUp className="w-4 h-4" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4" />
-                  )}
-                </button>
-                {showText && (
-                  <div className="p-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md max-h-64 overflow-y-auto">
-                    <p className="text-xs text-zinc-600 dark:text-zinc-400 whitespace-pre-wrap break-words">
-                      {extractedText}
-                    </p>
+                  <Upload className="mx-auto h-12 w-12 text-zinc-500 mb-4" />
+                  <p className="text-zinc-300 mb-2">
+                    Click para subir o arrastra el archivo aquí
+                  </p>
+                  <p className="text-sm text-zinc-500">PDF solamente, máximo 10 MB</p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+                </div>
+
+                {error && (
+                  <div className="mt-4 p-3 bg-red-950/20 border border-red-500/50 rounded-lg">
+                    <p className="text-sm text-red-400">{error}</p>
                   </div>
                 )}
-              </div>
-            )}
-
-            <div className="flex gap-2">
-              <Button
-                variant="default"
-                className="flex-1"
-                disabled={!extractedText || isExtracting}
-              >
-                Validate & Get Feedback
-              </Button>
-              <Button
-                variant="outline"
-                onClick={handleClearFile}
-                disabled={isExtracting}
-              >
-                Clear
-              </Button>
-            </div>
-          </div>
-        )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
 }
-
-

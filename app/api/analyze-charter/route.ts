@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeCharterWithClaude } from "@/lib/api/claudeCharterAnalyzer";
-import { ValidationResult } from "@/lib/validators/charterValidator";
+import type { ProjectType, ProjectStage } from "@/components/charter/ProjectContextSelector";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { text, structuralValidation } = body;
+    const { text, projectType, projectStage } = body;
 
     if (!text || typeof text !== "string" || text.trim().length === 0) {
       return NextResponse.json(
@@ -14,24 +14,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!structuralValidation) {
+    // Validar que el contexto del proyecto esté presente
+    if (!projectType || !projectStage) {
       return NextResponse.json(
-        { error: "Se requiere validación estructural" },
+        { error: "Missing project context (type or stage). Project context must be selected before analysis." },
         { status: 400 }
       );
     }
 
-    // Validar estructura de ValidationResult
-    const validation = structuralValidation as ValidationResult;
-    if (typeof validation.completeness !== 'number' || !Array.isArray(validation.sections)) {
+    // Validar valores válidos
+    if (projectType !== 'strategic' && projectType !== 'operational') {
       return NextResponse.json(
-        { error: "Validación estructural inválida" },
+        { error: "Invalid projectType. Must be 'strategic' or 'operational'." },
+        { status: 400 }
+      );
+    }
+
+    if (projectStage !== 'shaping' && projectStage !== 'draft' && projectStage !== 'ready') {
+      return NextResponse.json(
+        { error: "Invalid projectStage. Must be 'shaping', 'draft', or 'ready'." },
         { status: 400 }
       );
     }
 
     // Analizar charter con Claude
-    const analysis = await analyzeCharterWithClaude(text, validation);
+    const analysis = await analyzeCharterWithClaude(text, projectType as ProjectType, projectStage as ProjectStage);
 
     return NextResponse.json(analysis);
   } catch (error) {

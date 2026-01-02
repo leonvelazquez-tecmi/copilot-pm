@@ -202,7 +202,7 @@ export default function Home() {
         <TabsContent value="debug" className="flex-1 overflow-y-auto m-0 mt-0">
           <div className="mx-auto max-w-4xl px-4 py-6">
             <PDFUploadCard />
-          </div>
+        </div>
         </TabsContent>
       </Tabs>
     </div>
